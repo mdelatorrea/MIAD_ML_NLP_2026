@@ -1,0 +1,51 @@
+<html>
+<head>
+<meta charset="utf-8">
+<title>Resumen de intentos de modelado</title>
+<style>
+body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.35; color: #222222; }
+h1 { font-size: 18pt; margin-bottom: 10px; }
+h2 { font-size: 13pt; margin-top: 18px; margin-bottom: 6px; color: #1f4e79; }
+p { margin-top: 0; margin-bottom: 9px; text-align: justify; }
+</style>
+</head>
+<body>
+<h1>Resumen de los intentos de modelado para predicción de popularidad en Spotify</h1>
+
+<h2>Contexto general</h2>
+<p>El proyecto consistió en predecir la variable popularity de canciones de Spotify usando la base de entrenamiento dataTrain_Spotify.csv y generando predicciones para dataTest_Spotify.csv. La base de entrenamiento tiene 79800 registros y 21 columnas, mientras que la base de prueba tiene 34200 registros y 20 columnas. Las variables incluyen información textual de la canción, del artista, del álbum y del género, además de características numéricas de audio como duración, energía, volumen, tempo, bailabilidad, valencia, acusticidad, instrumentalidad y presencia en vivo.</p>
+
+<h2>Primeros modelos</h2>
+<p>El trabajo inició con el notebook proyecto_1.ipynb. En esta primera etapa se prepararon los datos de forma sencilla. Se creó la variable n_artists para contar el número de artistas, se convirtió explicit a formato numérico, se imputaron valores faltantes con la mediana y se eliminaron variables textuales como track_id, track_name, album_name, artists y posteriormente track_genre. Con esta versión se entrenaron modelos de Random Forest y Gradient Boosting. Estos intentos sirvieron como línea base y generaron los archivos submission_rf_base.csv, submission_gb.csv y submission_rf_mejorado.csv.</p>
+
+<p>Después se hizo una segunda prueba en proyecto_1_prueba2.ipynb. En ese intento se agregaron variables derivadas como duration_min, energy_loudness y energy_valence. El modelo usado fue un Random Forest más grande, con 1200 árboles y mayor libertad de crecimiento. Este ajuste mejoró la validación y dejó un RMSE de 16.2516, generando el archivo submission_rf_v2.csv. Este resultado mostró que las variables de interacción aportaban información útil, pero también que Random Forest no era el modelo más competitivo para este problema.</p>
+
+<h2>Pruebas con modelos de boosting</h2>
+<p>El siguiente avance fue probar XGBoost en xgboosting.ipynb. En este notebook se mantuvieron variables nuevas como duration_min, energy_loudness, energy_valence y n_artists. Además, track_genre se transformó con LabelEncoder para conservar la información del género en forma numérica. Se aplicó RandomizedSearchCV con validación cruzada para buscar combinaciones de n_estimators, learning_rate, max_depth, subsample, colsample_bytree, gamma, reg_alpha y reg_lambda. El mejor XGBoost alcanzó un RMSE de 15.3723 y generó submission_xgb_randomsearch.csv.</p>
+
+<p>Luego se probó LightGBM en lightboosting.ipynb con una preparación parecida. Se usaron variables de duración, interacciones de energía con volumen y valencia, conteo de artistas, codificación del género y búsqueda aleatoria de hiperparámetros. El modelo LightGBM obtuvo un RMSE de 15.4080 y generó submission_lgb_v1.csv. Aunque quedó levemente por debajo del XGBoost en esa validación, LightGBM mostró un buen equilibrio entre desempeño, velocidad y flexibilidad para seguir agregando variables.</p>
+
+<h2>Modelos alternativos y ensamblaje</h2>
+<p>También se evaluó CatBoost en catboosting.ipynb. En ese caso se trabajó con variables similares y se entrenó un CatBoostRegressor. La versión limpia tuvo un RMSE de 18.3848 y otra ejecución quedó en 23.1487, por lo que no superó a los modelos de boosting anteriores. Aun así, fue útil como comparación porque confirmó que el enfoque que mejor estaba funcionando era LightGBM o XGBoost con ingeniería de variables específica.</p>
+
+<p>En xlg_lgb.ipynb se intentó combinar XGBoost y LightGBM. Ambos modelos se optimizaron con RandomizedSearchCV y luego se creó un ensamble ponderado, usando 60 por ciento de XGBoost y 40 por ciento de LightGBM. En esa ejecución el XGBoost obtuvo RMSE de 16.4512 y LightGBM obtuvo 16.2422, por lo que el ensamble no representó una mejora clara frente al mejor XGBoost individual ni frente a los mejores experimentos con LightGBM.</p>
+
+<h2>LightGBM con validación cruzada</h2>
+<p>Más adelante, en lightgbm_con_variables_nuevas.ipynb, se pasó de una sola partición train validation a una validación KFold de 5 particiones. Este cambio permitió medir el desempeño de una forma más estable. Se entrenó LightGBM con 1000 estimadores y learning_rate de 0.03, usando variables como duration_min y energy_valence, además de la codificación del género. Los RMSE por fold estuvieron alrededor de 17.34, 17.67, 17.43, 17.62 y 17.39. Aunque la validación fue más robusta, esta versión no fue la más competitiva y generó submission_lgb_final.csv.</p>
+
+<h2>Modelo actual con mejor enfoque</h2>
+<p>El mejor enfoque actual quedó documentado en modelo_mejor_puntaje.ipynb y en el script solution_lgb_target_encoding.py. Esta versión usa LightGBM, pero incorpora una ingeniería de variables mucho más completa. Primero limpia variables categóricas convirtiéndolas a texto en minúscula y reemplazando faltantes. Luego crea variables como first_artist, track_artist, album_artist y genre_artist, que capturan combinaciones importantes entre canción, artista, álbum y género.</p>
+
+<p>Además de las variables básicas, el modelo final agrega transformaciones numéricas como duration_min, log_duration, energy_loudness, energy_valence, dance_valence, acoustic_energy y loudness_energy_ratio. También crea agrupaciones por tempo y duración, cuenta el número de artistas, mide longitudes de nombres de canción y álbum, y marca casos especiales como canciones instrumentales, canciones con alta proporción de habla y canciones en vivo.</p>
+
+<p>La mejora más importante de esta última versión es el target encoding con validación cruzada interna. En lugar de eliminar las variables textuales, el modelo aprovecha la información histórica de artists, first_artist, album_name, track_name, track_genre, track_artist, album_artist y genre_artist. Para reducir el riesgo de sobreajuste, el encoding se calcula dentro de folds internos y se suaviza con la media global. También se agregan conteos logarítmicos por categoría, lo que ayuda al modelo a diferenciar categorías frecuentes de categorías poco observadas.</p>
+
+<p>La validación principal se hace con KFold de 5 particiones. En cada fold se entrena un LightGBM regularizado con 5000 estimadores, learning_rate de 0.02, num_leaves de 63, subsample de 0.85, colsample_bytree de 0.85, reg_alpha de 0.2 y reg_lambda de 5.0, usando early stopping para detener el entrenamiento cuando deja de mejorar. Las predicciones de test se promedian entre los cinco folds.</p>
+
+<p>El paso final del mejor modelo consiste en aprovechar track_id cuando una canción de test ya existe en entrenamiento. Para esos casos, la predicción se reemplaza por la popularidad promedio observada de ese mismo track_id. Esta decisión tiene sentido porque si la canción exacta ya apareció en los datos de entrenamiento, su popularidad histórica es una señal directa y normalmente más confiable que una predicción puramente general. El archivo final generado por esta versión es submission_lgb_te_trackid_v1.csv, que corresponde al modelo actual más fuerte.</p>
+
+<h2>Conclusión</h2>
+<p>La evolución del proyecto muestra un camino razonable. Primero se probaron modelos base eliminando texto, luego se incorporaron variables de interacción, después se exploraron algoritmos más potentes como XGBoost, LightGBM y CatBoost, y finalmente se aprovechó mejor la información categórica mediante target encoding. El mayor salto conceptual fue dejar de descartar las columnas textuales y convertirlas en señales útiles, especialmente artista, canción, álbum, género y sus combinaciones. Por eso el mejor modelo actual no depende solo de las características de audio, sino que combina audio, metadatos, validación cruzada, regularización y una corrección directa por track_id para canciones ya conocidas.</p>
+
+</body>
+</html>
